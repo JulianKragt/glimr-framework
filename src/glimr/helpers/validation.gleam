@@ -131,7 +131,7 @@ pub fn for(
   field_name: String,
   rules: List(Rule),
 ) -> Result(Nil, ValidationError) {
-  let value = form |> form.get_field_value(field_name)
+  let value = form |> form.get(field_name)
 
   let messages =
     rules
@@ -147,6 +147,8 @@ pub fn for(
     msgs -> Error(ValidationError(name: field_name, messages: msgs))
   }
 }
+
+// TODO: add a for_file function to validate a file
 
 /// ------------------------------------------------------------
 /// Convert Errors to Result

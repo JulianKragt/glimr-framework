@@ -22,10 +22,10 @@ import wisp
 /// ------------------------------------------------------------
 /// Example:
 /// ```gleam
-/// let email = form.get_field_value(form_data, "email")
+/// let email = form_data |> form.get("email")
 /// ```
 ///
-pub fn get_field_value(form_data: wisp.FormData, field_name: String) -> String {
+pub fn get(form_data: wisp.FormData, field_name: String) -> String {
   list.key_find(form_data.values, field_name) |> result.unwrap("")
 }
 
@@ -40,13 +40,13 @@ pub fn get_field_value(form_data: wisp.FormData, field_name: String) -> String {
 /// ------------------------------------------------------------
 /// Example:
 /// ```gleam
-/// case form.has_field(form_data, "email") {
+/// case form_data |> form.has("email") {
 ///   True -> process_email(form_data)
 ///   False -> validation_error("Email is required")
 /// }
 /// ```
 ///
-pub fn has_field(form_data: wisp.FormData, field_name: String) -> Bool {
+pub fn has(form_data: wisp.FormData, field_name: String) -> Bool {
   case list.key_find(form_data.values, field_name) {
     Ok(_) -> True
     Error(_) -> False
@@ -64,7 +64,7 @@ pub fn has_field(form_data: wisp.FormData, field_name: String) -> Bool {
 /// ------------------------------------------------------------
 /// Example:
 /// ```gleam
-/// case form.get_file(form_data, "avatar") {
+/// case form_data |> form.get_file("avatar") {
 ///   Ok(file) -> save_upload(file)
 ///   Error(_) -> no_file_error()
 /// }
@@ -88,7 +88,7 @@ pub fn get_file(
 /// ------------------------------------------------------------
 /// Example:
 /// ```gleam
-/// case form.has_file(form_data, "avatar") {
+/// case form_data |> form.has_file("avatar") {
 ///   True -> process_upload(form_data)
 ///   False -> use_default_avatar()
 /// }

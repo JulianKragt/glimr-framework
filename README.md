@@ -1,5 +1,5 @@
 # Glimr
-
+ including required fields, email, length constraints, and numeric ranges
 A type-safe web framework for Gleam that brings functional programming elegance and developer productivity to web development.
 
 ## About Glimr
