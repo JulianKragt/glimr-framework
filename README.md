@@ -12,6 +12,7 @@ A type-safe web framework for Gleam that brings functional programming elegance 
 - **Middleware System** - Composable middleware at the route and group level
 - **Middleware Groups** - Separate handling for web and API routes with appropriate error responses
 - **Context System** - Type-safe dependency injection throughout your application
+- **Form Validation** - Built-in validation rules for common patterns
 - **Builder Pattern** - Fluent, chainable API for defining routes
 - **Route Grouping** - Group routes by middleware, path prefix, or name prefix
 
