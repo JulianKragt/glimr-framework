@@ -9,9 +9,11 @@
 
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
 import glimr/helpers/form
 import glimr/routing/route
+import simplifile
 import wisp
 
 /// ------------------------------------------------------------
@@ -44,6 +46,24 @@ pub type Rule {
   Max(Int)
   Numeric
   Url
+  Digits(Int)
+  MinDigits(Int)
+  MaxDigits(Int)
+}
+
+/// ------------------------------------------------------------
+/// File Rule Type
+/// ------------------------------------------------------------
+///
+/// Defines validation rules that can be applied to file upload
+/// fields. Rules include required file checks, file size
+/// constraints (in KB), and allowed file extension validation.
+///
+pub type FileRule {
+  FileRequired
+  FileMinSize(Int)
+  FileMaxSize(Int)
+  FileExtension(List(String))
 }
 
 /// ------------------------------------------------------------
@@ -95,7 +115,7 @@ pub fn handle(
 /// ```gleam
 /// validation.start([
 ///   form |> validation.for("email", [Required, Email]),
-///   form |> validation.for("age", [Required, Numeric, Min(18)]),
+///   form |> validation.for("name", [Required, Min(2)]),
 /// ])
 /// ```
 ///
@@ -148,7 +168,41 @@ pub fn for(
   }
 }
 
-// TODO: add a for_file function to validate a file
+/// ------------------------------------------------------------
+/// Validate File Field
+/// ------------------------------------------------------------
+///
+/// Validates a single file upload field against a list of rules.
+/// Returns Ok(Nil) if all rules pass, or Error with the
+/// validation error containing all failed rule messages.
+///
+/// ------------------------------------------------------------
+/// Example:
+/// ```gleam
+/// form |> validation.for_file("avatar", [FileRequired, FileMaxSize(2048)])
+/// ```
+///
+pub fn for_file(
+  form: wisp.FormData,
+  field_name: String,
+  rules: List(FileRule),
+) -> Result(Nil, ValidationError) {
+  let file = form |> form.get_file(field_name)
+
+  let messages =
+    rules
+    |> list.filter_map(fn(rule) {
+      case apply_file_rule(file, rule) {
+        Ok(_) -> Error(Nil)
+        Error(message) -> Ok(field_name <> " " <> message)
+      }
+    })
+
+  case messages {
+    [] -> Ok(Nil)
+    msgs -> Error(ValidationError(name: field_name, messages: msgs))
+  }
+}
 
 /// ------------------------------------------------------------
 /// Convert Errors to Result
@@ -185,6 +239,9 @@ fn apply_rule(value: String, rule: Rule) -> Result(Nil, String) {
     Max(max) -> validate_max(value, max)
     Numeric -> validate_numeric(value)
     Url -> validate_url(value)
+    Digits(count) -> validate_digits(value, count)
+    MinDigits(min) -> validate_min_digits(value, min)
+    MaxDigits(max) -> validate_max_digits(value, max)
   }
 }
 
@@ -313,5 +370,220 @@ fn validate_url(value: String) -> Result(Nil, String) {
   {
     True -> Ok(Nil)
     False -> Error("must be a valid URL")
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate Exact Digit Count
+/// ------------------------------------------------------------
+///
+/// Validates that a numeric field has exactly the specified
+/// number of digits. Returns an error if the field is not a
+/// valid number or doesn't have the exact digit count.
+///
+fn validate_digits(value: String, count: Int) -> Result(Nil, String) {
+  case int.parse(value) {
+    Ok(n) -> {
+      let digit_count =
+        int.absolute_value(n)
+        |> int.to_string
+        |> string.length
+
+      case digit_count == count {
+        True -> Ok(Nil)
+        False ->
+          Error("must have exactly " <> int.to_string(count) <> " digits")
+      }
+    }
+    Error(_) -> Error("must be a valid number")
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate Minimum Digit Count
+/// ------------------------------------------------------------
+///
+/// Validates that a numeric field has at least the specified
+/// number of digits. Returns an error if the field is not a
+/// valid number or has fewer digits than required.
+///
+fn validate_min_digits(value: String, min: Int) -> Result(Nil, String) {
+  case int.parse(value) {
+    Ok(n) -> {
+      let digit_count =
+        int.absolute_value(n)
+        |> int.to_string
+        |> string.length
+
+      case digit_count >= min {
+        True -> Ok(Nil)
+        False -> Error("must have at least " <> int.to_string(min) <> " digits")
+      }
+    }
+    Error(_) -> Error("must be a valid number")
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate Maximum Digit Count
+/// ------------------------------------------------------------
+///
+/// Validates that a numeric field has at most the specified
+/// number of digits. Returns an error if the field is not a
+/// valid number or has more digits than allowed.
+///
+fn validate_max_digits(value: String, max: Int) -> Result(Nil, String) {
+  case int.parse(value) {
+    Ok(n) -> {
+      let digit_count =
+        int.absolute_value(n)
+        |> int.to_string
+        |> string.length
+
+      case digit_count <= max {
+        True -> Ok(Nil)
+        False ->
+          Error("must have no more than " <> int.to_string(max) <> " digits")
+      }
+    }
+    Error(_) -> Error("must be a valid number")
+  }
+}
+
+/// ------------------------------------------------------------
+/// Apply File Rule
+/// ------------------------------------------------------------
+///
+/// Applies a single validation rule to an uploaded file. Returns
+/// Ok(Nil) if the rule passes, or Error with an error message
+/// if validation fails. Used internally by the for_file function.
+///
+fn apply_file_rule(
+  file: Result(wisp.UploadedFile, Nil),
+  rule: FileRule,
+) -> Result(Nil, String) {
+  case rule {
+    FileRequired -> validate_file_required(file)
+    FileMinSize(min) -> validate_file_min_size(file, min)
+    FileMaxSize(max) -> validate_file_max_size(file, max)
+    FileExtension(extensions) -> validate_file_extension(file, extensions)
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate File Required
+/// ------------------------------------------------------------
+///
+/// Validates that a file has been uploaded. Returns an error
+/// if no file is present in the form data.
+///
+fn validate_file_required(
+  file: Result(wisp.UploadedFile, Nil),
+) -> Result(Nil, String) {
+  case file {
+    Ok(uploaded_file) -> {
+      case string.trim(uploaded_file.file_name) {
+        "" -> Error("is required")
+        _ -> Ok(Nil)
+      }
+    }
+    Error(_) -> Error("is required")
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate File Minimum Size
+/// ------------------------------------------------------------
+///
+/// Validates that an uploaded file meets or exceeds the
+/// specified minimum size in kilobytes (KB).
+///
+fn validate_file_min_size(
+  file: Result(wisp.UploadedFile, Nil),
+  min_kb: Int,
+) -> Result(Nil, String) {
+  case file {
+    Error(_) -> Ok(Nil)
+    Ok(uploaded_file) -> {
+      case simplifile.file_info(uploaded_file.path) {
+        Ok(info) -> {
+          let size_kb = info.size / 1024
+          case size_kb >= min_kb {
+            True -> Ok(Nil)
+            False ->
+              Error(
+                "must be at least " <> int.to_string(min_kb) <> " KB in size",
+              )
+          }
+        }
+        Error(_) -> Error("could not read file information")
+      }
+    }
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate File Maximum Size
+/// ------------------------------------------------------------
+///
+/// Validates that an uploaded file does not exceed the
+/// specified maximum size in kilobytes (KB).
+///
+fn validate_file_max_size(
+  file: Result(wisp.UploadedFile, Nil),
+  max_kb: Int,
+) -> Result(Nil, String) {
+  case file {
+    Error(_) -> Ok(Nil)
+    Ok(uploaded_file) -> {
+      case simplifile.file_info(uploaded_file.path) {
+        Ok(info) -> {
+          let size_kb = info.size / 1024
+          case size_kb <= max_kb {
+            True -> Ok(Nil)
+            False ->
+              Error(
+                "must be no more than "
+                <> int.to_string(max_kb)
+                <> " KB in size",
+              )
+          }
+        }
+        Error(_) -> Error("could not read file information")
+      }
+    }
+  }
+}
+
+/// ------------------------------------------------------------
+/// Validate File Extension
+/// ------------------------------------------------------------
+///
+/// Validates that an uploaded file has one of the allowed
+/// extensions. Extensions should be provided without dots
+/// (e.g., ["jpg", "png", "pdf"]).
+///
+fn validate_file_extension(
+  file: Result(wisp.UploadedFile, Nil),
+  allowed_extensions: List(String),
+) -> Result(Nil, String) {
+  case file {
+    Error(_) -> Ok(Nil)
+    Ok(uploaded_file) -> {
+      let file_extension =
+        uploaded_file.file_name
+        |> string.split(".")
+        |> list.last
+        |> result.unwrap("")
+        |> string.lowercase
+
+      case list.contains(allowed_extensions, file_extension) {
+        True -> Ok(Nil)
+        False -> {
+          let allowed = string.join(allowed_extensions, ", ")
+          Error("must have one of the following extensions: " <> allowed)
+        }
+      }
+    }
   }
 }
