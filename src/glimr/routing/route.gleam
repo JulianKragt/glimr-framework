@@ -7,13 +7,15 @@
 //// and route grouping capabilities.
 ////
 
-import gleam/dict
-import gleam/http
+import gleam/dict.{type Dict}
+import gleam/http.{type Method}
 import gleam/list
 import gleam/result
 import gleam/string
-import glimr/http/kernel
-import wisp
+import glimr/http/kernel.{type Middleware, type MiddlewareGroup}
+import wisp.{type Request, type Response}
+
+// ------------------------------------------------------------- Public Types
 
 /// ------------------------------------------------------------
 /// RouteRequest Type
@@ -24,7 +26,7 @@ import wisp
 /// mapping parameter names to their string values.
 ///
 pub type RouteRequest {
-  RouteRequest(request: wisp.Request, params: dict.Dict(String, String))
+  RouteRequest(request: Request, params: Dict(String, String))
 }
 
 /// ------------------------------------------------------------
@@ -36,10 +38,7 @@ pub type RouteRequest {
 /// routes in the group. 
 ///
 pub type RouteGroup(context) {
-  RouteGroup(
-    middleware_group: kernel.MiddlewareGroup,
-    routes: List(Route(context)),
-  )
+  RouteGroup(middleware_group: MiddlewareGroup, routes: List(Route(context)))
 }
 
 /// ------------------------------------------------------------
@@ -51,18 +50,7 @@ pub type RouteGroup(context) {
 /// function but it can be an anonymous function as well.
 ///
 pub type RouteHandler(context) =
-  fn(RouteRequest, context) -> wisp.Response
-
-/// ------------------------------------------------------------
-/// Middleware Type
-/// ------------------------------------------------------------
-///
-/// A function that intercepts requests before they reach the
-/// handler. Can modify the request, execute logic, and modify
-/// the response. Uses the 'next' callback to continue the chain.
-///
-pub type Middleware(context) =
-  fn(wisp.Request, context, fn(wisp.Request) -> wisp.Response) -> wisp.Response
+  fn(RouteRequest, context) -> Response
 
 /// ------------------------------------------------------------
 /// Route Type
@@ -75,13 +63,15 @@ pub type Middleware(context) =
 ///
 pub type Route(context) {
   Route(
-    method: http.Method,
+    method: Method,
     path: String,
     handler: RouteHandler(context),
     middleware: List(Middleware(context)),
     name: String,
   )
 }
+
+// ------------------------------------------------------------- Public Functions
 
 /// ------------------------------------------------------------
 /// Get Route Parameter
@@ -90,6 +80,21 @@ pub type Route(context) {
 /// Extracts a parameter value from the route request by key.
 /// Returns Ok(value) if the parameter exists, or Error(Nil)
 /// if not found. Use for required parameters that must exist.
+///
+/// ------------------------------------------------------------
+///
+/// *Example:*
+///
+/// ```gleam
+/// pub fn show(req: RouteRequest, ctx: Context) -> Response {
+///   let assert Ok(user_id) = route.get_param(req, "id")
+/// 
+///   view.build()
+///   |> view.html("users/show.html")
+///   |> view.data([#("user_id", user_id)])
+///   |> view.render()
+/// }
+/// ```
 ///
 pub fn get_param(req: RouteRequest, key: String) -> Result(String, Nil) {
   dict.get(req.params, key)
@@ -102,6 +107,21 @@ pub fn get_param(req: RouteRequest, key: String) -> Result(String, Nil) {
 /// Extracts a parameter value from the route request by key,
 /// returning the provided default value if not found. Use for
 /// optional parameters with fallback values.
+///
+/// ------------------------------------------------------------
+///
+/// *Example:*
+///
+/// ```gleam
+/// pub fn index(req: RouteRequest, ctx: Context) -> Response {
+///   let page = route.get_param_or(req, "page", "1")
+/// 
+///   view.build()
+///   |> view.html("users/index.html")
+///   |> view.data([#("current_page", page)])
+///   |> view.render()
+/// }
+/// ```
 ///
 pub fn get_param_or(req: RouteRequest, key: String, default: String) -> String {
   dict.get(req.params, key) |> result.unwrap(default)
@@ -116,7 +136,9 @@ pub fn get_param_or(req: RouteRequest, key: String, default: String) -> String {
 /// slash). Supports parameters like /users/{id}.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.get("/users", user_controller.index)
 /// ```
@@ -140,7 +162,9 @@ pub fn get(path: String, handler: RouteHandler(context)) -> Route(context) {
 /// slash). Supports parameters like /users/{id}.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.post("/users", user_controller.store)
 /// ```
@@ -164,7 +188,9 @@ pub fn post(path: String, handler: RouteHandler(context)) -> Route(context) {
 /// slash). Supports parameters like /users/{id}.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.put("/users/{user_id}", user_controller.update)
 /// ```
@@ -188,7 +214,9 @@ pub fn put(path: String, handler: RouteHandler(context)) -> Route(context) {
 /// slash). Supports parameters like /users/{id}.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.delete("/users/{user_id}", user_controller.delete)
 /// ```
@@ -204,6 +232,37 @@ pub fn delete(path: String, handler: RouteHandler(context)) -> Route(context) {
 }
 
 /// ------------------------------------------------------------
+/// Route Redirect Builder
+/// ------------------------------------------------------------
+///
+/// Creates a GET route that redirects to another path. Useful
+/// for handling old URLs, enforcing canonical paths, or 
+/// routing users to login pages. Both old and new paths are 
+/// automatically normalized.
+///
+/// ------------------------------------------------------------
+///
+/// *Example:*
+/// 
+/// ```gleam
+/// route.redirect("/old-page", "/new-page")
+/// ```
+///
+pub fn redirect(path: String, to: String) -> Route(context) {
+  let redirect_handler = fn(_req: RouteRequest, _ctx: context) -> Response {
+    wisp.redirect(normalize_path(to))
+  }
+
+  Route(
+    method: http.Get,
+    path: normalize_path(path),
+    handler: redirect_handler,
+    middleware: [],
+    name: "",
+  )
+}
+
+/// ------------------------------------------------------------
 /// Apply Middleware to Route
 /// ------------------------------------------------------------
 ///
@@ -212,7 +271,9 @@ pub fn delete(path: String, handler: RouteHandler(context)) -> Route(context) {
 /// pipe operator to chain.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.get(...)
 ///   |> router.middleware([logger.handle])
@@ -234,7 +295,9 @@ pub fn middleware(
 /// "admin.dashboard". Use the pipe operator to chain.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.get(...)
 ///   |> router.name("users.get")
@@ -253,7 +316,9 @@ pub fn name(route: Route(context), name: String) -> Route(context) {
 /// group middleware executes first (outermost wrapper).
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.group_middleware([logger.handle], [
 ///   [
@@ -282,7 +347,9 @@ pub fn group_middleware(
 /// prefix is automatically normalized.
 ///
 /// ------------------------------------------------------------
-/// Example:
+/// 
+/// *Example:*
+/// 
 /// ```gleam
 /// route.group_path_prefix("/users", [
 ///   [
@@ -299,7 +366,12 @@ pub fn group_path_prefix(
 ) -> List(Route(context)) {
   use route <- list.map(list.flatten(routes))
 
-  Route(..route, path: normalize_path(prefix) <> route.path)
+  let path = case route.path {
+    "/" -> normalize_path(prefix)
+    _ -> normalize_path(prefix) <> route.path
+  }
+
+  Route(..route, path: path)
 }
 
 /// ------------------------------------------------------------
@@ -311,7 +383,9 @@ pub fn group_path_prefix(
 /// prefix is prepended to each route's existing name.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// route.group_name_prefix("users.", [
 ///   [
@@ -330,6 +404,8 @@ pub fn group_name_prefix(
 
   Route(..route, name: name <> route.name)
 }
+
+// ------------------------------------------------------------- Private Functions
 
 /// ------------------------------------------------------------
 /// Normalize Path

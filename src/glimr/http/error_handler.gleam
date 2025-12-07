@@ -10,7 +10,9 @@
 import gleam/bool
 import gleam/json
 import gleam/string
-import wisp
+import wisp.{type Response}
+
+// ------------------------------------------------------------- Public Functions
 
 /// ------------------------------------------------------------
 /// Default HTML Error Responses
@@ -22,9 +24,7 @@ import wisp
 /// codes receive default HTML error pages. Can be overridden by
 /// implementing custom error handlers in your application.
 ///
-pub fn default_html_responses(
-  handle_request: fn() -> wisp.Response,
-) -> wisp.Response {
+pub fn default_html_responses(handle_request: fn() -> Response) -> Response {
   let response = handle_request()
 
   use <- bool.guard(
@@ -75,9 +75,7 @@ pub fn default_html_responses(
 /// codes receive JSON error objects with an "error" field. Used
 /// for API routes to ensure consistent JSON error formatting.
 ///
-pub fn default_json_responses(
-  handle_request: fn() -> wisp.Response,
-) -> wisp.Response {
+pub fn default_json_responses(handle_request: fn() -> Response) -> Response {
   let response = handle_request()
 
   use <- bool.guard(
@@ -123,6 +121,8 @@ pub fn default_json_responses(
   }
 }
 
+// ------------------------------------------------------------- Private Functions
+
 /// ------------------------------------------------------------
 /// Response Body is Empty
 /// ------------------------------------------------------------
@@ -130,7 +130,7 @@ pub fn default_json_responses(
 /// This Checks if a response body is empty and returns a bool
 /// so that empty responses can fallback to our defaults
 ///
-fn is_empty_response(response: wisp.Response) -> Bool {
+fn is_empty_response(response: Response) -> Bool {
   case response.body {
     wisp.Text(content) -> string.is_empty(content)
     wisp.Bytes(_) -> False

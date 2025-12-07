@@ -7,13 +7,15 @@
 //// extraction, middleware application, and route resolution.
 ////
 
-import gleam/dict
-import gleam/http
+import gleam/dict.{type Dict}
+import gleam/http.{type Method}
 import gleam/list
 import gleam/string
-import glimr/http/kernel
-import glimr/routing/route
-import wisp
+import glimr/http/kernel.{type Middleware, type MiddlewareGroup}
+import glimr/routing/route.{type Route, type RouteGroup, type RouteRequest}
+import wisp.{type Response}
+
+// ------------------------------------------------------------- Public Functions
 
 /// ------------------------------------------------------------
 /// Apply Route Middleware
@@ -25,18 +27,18 @@ import wisp
 /// going in, and reverse order coming out.
 ///
 pub fn apply_middleware(
-  route_req: route.RouteRequest,
+  route_req: RouteRequest,
   ctx: context,
-  middleware: List(route.Middleware(context)),
-  handler: fn(route.RouteRequest, context) -> wisp.Response,
-) -> wisp.Response {
+  middleware: List(Middleware(context)),
+  handler: fn(RouteRequest, context) -> Response,
+) -> Response {
   case middleware {
     [] -> handler(route_req, ctx)
     [first, ..rest] -> {
       use req <- first(route_req.request, ctx)
 
-      let updated_route_req = route.RouteRequest(..route_req, request: req)
-      apply_middleware(updated_route_req, ctx, rest, handler)
+      let req = route.RouteRequest(..route_req, request: req)
+      apply_middleware(req, ctx, rest, handler)
     }
   }
 }
@@ -51,13 +53,10 @@ pub fn apply_middleware(
 /// Error if no match is found.
 ///
 pub fn find_matching_route_in_groups(
-  route_groups: List(route.RouteGroup(context)),
+  route_groups: List(RouteGroup(context)),
   path: String,
-  method: http.Method,
-) -> Result(
-  #(route.Route(context), dict.Dict(String, String), kernel.MiddlewareGroup),
-  Nil,
-) {
+  method: Method,
+) -> Result(#(Route(context), Dict(String, String), MiddlewareGroup), Nil) {
   route_groups
   |> list.find_map(fn(group) {
     case find_matching_route(group.routes, path, method) {
@@ -76,8 +75,8 @@ pub fn find_matching_route_in_groups(
 /// a path exists (for 404 vs 405 status codes).
 ///
 pub fn get_all_routes(
-  route_groups: List(route.RouteGroup(context)),
-) -> List(route.Route(context)) {
+  route_groups: List(RouteGroup(context)),
+) -> List(Route(context)) {
   route_groups
   |> list.flat_map(fn(group) { group.routes })
 }
@@ -100,6 +99,8 @@ pub fn matches_path(pattern: String, path: String) -> Bool {
   }
 }
 
+// ------------------------------------------------------------- Private Functions
+
 /// ------------------------------------------------------------
 /// Find Matching Route
 /// ------------------------------------------------------------
@@ -109,10 +110,10 @@ pub fn matches_path(pattern: String, path: String) -> Bool {
 /// or Error if no match is found.
 ///
 fn find_matching_route(
-  routes: List(route.Route(context)),
+  routes: List(Route(context)),
   path: String,
-  method: http.Method,
-) -> Result(#(route.Route(context), dict.Dict(String, String)), Nil) {
+  method: Method,
+) -> Result(#(Route(context), Dict(String, String)), Nil) {
   routes
   |> list.find_map(fn(route) {
     case route.method == method && matches_path(route.path, path) {
@@ -175,7 +176,7 @@ fn is_param(segment: String) -> Bool {
 /// against the route pattern. Returns a dictionary that maps 
 /// parameter names to their values from the URL.
 ///
-fn extract_params(pattern: String, path: String) -> dict.Dict(String, String) {
+fn extract_params(pattern: String, path: String) -> Dict(String, String) {
   // TODO: if param contains a : use that to extract the correct value
   // and we can possibly throw an error from here like a 404 for example
   // if we get {user:id} and the url value is "10" but a user of id 10
@@ -200,8 +201,8 @@ fn extract_params(pattern: String, path: String) -> dict.Dict(String, String) {
 fn do_extract_params(
   pattern_segments: List(String),
   path_segments: List(String),
-  params: dict.Dict(String, String),
-) -> dict.Dict(String, String) {
+  params: Dict(String, String),
+) -> Dict(String, String) {
   case pattern_segments, path_segments {
     [], [] -> params
     [p, ..rest_p], [s, ..rest_s] -> {

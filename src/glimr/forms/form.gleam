@@ -9,7 +9,9 @@
 
 import gleam/list
 import gleam/result
-import wisp
+import wisp.{type FormData, type UploadedFile}
+
+// ------------------------------------------------------------- Public Functions
 
 /// ------------------------------------------------------------
 /// Get Form Field Value
@@ -20,13 +22,15 @@ import wisp
 /// if the field doesn't exist. Use for optional form fields.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
-/// let email = form_data |> form.get("email")
+/// let email = form |> form.get("email")
 /// ```
 ///
-pub fn get(form_data: wisp.FormData, field_name: String) -> String {
-  list.key_find(form_data.values, field_name) |> result.unwrap("")
+pub fn get(form: FormData, field: String) -> String {
+  list.key_find(form.values, field) |> result.unwrap("")
 }
 
 /// ------------------------------------------------------------
@@ -38,16 +42,18 @@ pub fn get(form_data: wisp.FormData, field_name: String) -> String {
 /// Use to validate required fields before processing.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
-/// case form_data |> form.has("email") {
+/// case form |> form.has("email") {
 ///   True -> process_email(form_data)
-///   False -> validation_error("Email is required")
+///   False -> panic as "I'm literally panicking rn"
 /// }
 /// ```
 ///
-pub fn has(form_data: wisp.FormData, field_name: String) -> Bool {
-  case list.key_find(form_data.values, field_name) {
+pub fn has(form: FormData, field: String) -> Bool {
+  case list.key_find(form.values, field) {
     Ok(_) -> True
     Error(_) -> False
   }
@@ -62,19 +68,18 @@ pub fn has(form_data: wisp.FormData, field_name: String) -> Bool {
 /// file field doesn't exist. Use for file upload processing.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
-/// case form_data |> form.get_file("avatar") {
+/// case form |> form.get_file("avatar") {
 ///   Ok(file) -> save_upload(file)
-///   Error(_) -> no_file_error()
+///   Error(_) -> panic as "I'm literally panicking rn"
 /// }
 /// ```
 ///
-pub fn get_file(
-  form_data: wisp.FormData,
-  field_name: String,
-) -> Result(wisp.UploadedFile, Nil) {
-  list.key_find(form_data.files, field_name)
+pub fn get_file(form: FormData, field: String) -> Result(UploadedFile, Nil) {
+  list.key_find(form.files, field)
 }
 
 /// ------------------------------------------------------------
@@ -86,7 +91,9 @@ pub fn get_file(
 /// to validate file uploads before processing.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// case form_data |> form.has_file("avatar") {
 ///   True -> process_upload(form_data)
@@ -94,8 +101,8 @@ pub fn get_file(
 /// }
 /// ```
 ///
-pub fn has_file(form_data: wisp.FormData, field_name: String) -> Bool {
-  case get_file(form_data, field_name) {
+pub fn has_file(form: FormData, field: String) -> Bool {
+  case get_file(form, field) {
     Ok(_) -> True
     Error(_) -> False
   }

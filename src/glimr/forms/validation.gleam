@@ -11,10 +11,12 @@ import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
-import glimr/helpers/form
-import glimr/routing/route
+import glimr/forms/form
+import glimr/routing/route.{type RouteRequest}
 import simplifile
-import wisp
+import wisp.{type FormData, type Response, type UploadedFile}
+
+// ------------------------------------------------------------- Public Types
 
 /// ------------------------------------------------------------
 /// ValidationError Type
@@ -66,6 +68,8 @@ pub type FileRule {
   FileExtension(List(String))
 }
 
+// ------------------------------------------------------------- Public Functions
+
 /// ------------------------------------------------------------
 /// Handle Form Validation
 /// ------------------------------------------------------------
@@ -76,10 +80,10 @@ pub type FileRule {
 /// failure with formatted error messages.
 ///
 pub fn handle(
-  rules: fn(wisp.FormData) -> Result(Nil, List(ValidationError)),
-  req: route.RouteRequest,
-  on_valid: fn(wisp.FormData) -> wisp.Response,
-) -> wisp.Response {
+  rules: fn(FormData) -> Result(Nil, List(ValidationError)),
+  req: RouteRequest,
+  on_valid: fn(FormData) -> Response,
+) -> Response {
   use form <- wisp.require_form(req.request)
 
   case rules(form) {
@@ -111,7 +115,9 @@ pub fn handle(
 /// pass, or Error with all validation errors if any fail.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// validation.start([
 ///   form |> validation.for("email", [Required, Email]),
@@ -141,13 +147,15 @@ pub fn start(rules) -> Result(Nil, List(ValidationError)) {
 /// validation error containing all failed rule messages.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// form |> validation.for("email", [Required, Email])
 /// ```
 ///
 pub fn for(
-  form: wisp.FormData,
+  form: FormData,
   field_name: String,
   rules: List(Rule),
 ) -> Result(Nil, ValidationError) {
@@ -177,13 +185,15 @@ pub fn for(
 /// validation error containing all failed rule messages.
 ///
 /// ------------------------------------------------------------
-/// Example:
+///
+/// *Example:*
+/// 
 /// ```gleam
 /// form |> validation.for_file("avatar", [FileRequired, FileMaxSize(2048)])
 /// ```
 ///
 pub fn for_file(
-  form: wisp.FormData,
+  form: FormData,
   field_name: String,
   rules: List(FileRule),
 ) -> Result(Nil, ValidationError) {
@@ -220,6 +230,8 @@ pub fn response(
     _ -> Error(errors)
   }
 }
+
+// ------------------------------------------------------------- Private Functions
 
 /// ------------------------------------------------------------
 /// Apply Rule
@@ -459,7 +471,7 @@ fn validate_max_digits(value: String, max: Int) -> Result(Nil, String) {
 /// if validation fails. Used internally by the for_file function.
 ///
 fn apply_file_rule(
-  file: Result(wisp.UploadedFile, Nil),
+  file: Result(UploadedFile, Nil),
   rule: FileRule,
 ) -> Result(Nil, String) {
   case rule {
@@ -478,7 +490,7 @@ fn apply_file_rule(
 /// if no file is present in the form data.
 ///
 fn validate_file_required(
-  file: Result(wisp.UploadedFile, Nil),
+  file: Result(UploadedFile, Nil),
 ) -> Result(Nil, String) {
   case file {
     Ok(uploaded_file) -> {
@@ -499,7 +511,7 @@ fn validate_file_required(
 /// specified minimum size in kilobytes (KB).
 ///
 fn validate_file_min_size(
-  file: Result(wisp.UploadedFile, Nil),
+  file: Result(UploadedFile, Nil),
   min_kb: Int,
 ) -> Result(Nil, String) {
   case file {
@@ -530,7 +542,7 @@ fn validate_file_min_size(
 /// specified maximum size in kilobytes (KB).
 ///
 fn validate_file_max_size(
-  file: Result(wisp.UploadedFile, Nil),
+  file: Result(UploadedFile, Nil),
   max_kb: Int,
 ) -> Result(Nil, String) {
   case file {
@@ -564,7 +576,7 @@ fn validate_file_max_size(
 /// (e.g., ["jpg", "png", "pdf"]).
 ///
 fn validate_file_extension(
-  file: Result(wisp.UploadedFile, Nil),
+  file: Result(UploadedFile, Nil),
   allowed_extensions: List(String),
 ) -> Result(Nil, String) {
   case file {

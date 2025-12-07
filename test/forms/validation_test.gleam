@@ -2,7 +2,7 @@ import gleam/bit_array
 import gleam/list
 import gleam/string
 import gleeunit/should
-import glimr/helpers/validation
+import glimr/forms/validation
 import simplifile
 import wisp
 

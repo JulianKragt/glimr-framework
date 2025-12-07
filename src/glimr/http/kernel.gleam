@@ -7,6 +7,21 @@
 //// is applied to different types of routes.
 ////
 
+import wisp.{type Request, type Response}
+
+// ------------------------------------------------------------- Public Types
+
+/// ------------------------------------------------------------
+/// Middleware Type
+/// ------------------------------------------------------------
+///
+/// A function that intercepts requests before they reach the
+/// handler. Can modify the request, execute logic, and modify
+/// the response. Uses the 'next' callback to continue the chain.
+///
+pub type Middleware(context) =
+  fn(Request, context, fn(Request) -> Response) -> Response
+
 /// ------------------------------------------------------------
 /// MiddlewareGroup Type
 /// ------------------------------------------------------------

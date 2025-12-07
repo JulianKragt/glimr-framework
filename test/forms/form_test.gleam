@@ -1,5 +1,5 @@
 import gleeunit/should
-import glimr/helpers/form
+import glimr/forms/form
 import wisp
 
 pub fn get_existing_field_test() {
